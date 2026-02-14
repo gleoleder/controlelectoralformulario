@@ -242,16 +242,25 @@ async function appendRows(sheetName, rows) {
 }
 
 // ── Mapa ──
-const map = L.map('map', {
-  zoomControl: true,
-  attributionControl: false
-}).setView([-16.5, -64.5], 6);
+// ══════════════════════════════════════════════════════════════
+// MAPA - Inicializado después de cargar el DOM
+// ══════════════════════════════════════════════════════════════
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  maxZoom: 19
-}).addTo(map);
+let map;
+let markersLayer;
 
-let markersLayer = L.layerGroup().addTo(map);
+function initMap() {
+  map = L.map('map', {
+    zoomControl: true,
+    attributionControl: false
+  }).setView([-16.5, -64.5], 6);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19
+  }).addTo(map);
+
+  markersLayer = L.layerGroup().addTo(map);
+}
 
 // ══════════════════════════════════════════════════════════════
 // FUNCIONES AUXILIARES
@@ -309,6 +318,11 @@ function getColorEstado(estado) {
 // ══════════════════════════════════════════════════════════════
 
 function renderizarMapa() {
+  if (!map || !markersLayer) {
+    console.warn('Mapa no inicializado todavía');
+    return;
+  }
+  
   markersLayer.clearLayers();
   
   const filtros = {
@@ -886,56 +900,112 @@ function cerrarModal() {
   mesaActual = 1;
 }
 
-// Event listeners
-document.getElementById('btnCloseModal').addEventListener('click', cerrarModal);
-document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
-document.getElementById('btnGuardar').addEventListener('click', guardarDatos);
-
-document.getElementById('selDep')?.addEventListener('change', renderizarMapa);
-document.getElementById('selEstado')?.addEventListener('change', renderizarMapa);
-document.getElementById('searchRecinto')?.addEventListener('input', renderizarMapa);
-
-// Mobile sidebar
-document.getElementById('btnToggleSidebar')?.addEventListener('click', () => {
-  document.getElementById('sidebar').classList.toggle('show');
-  document.getElementById('btnToggleSidebar').classList.toggle('active');
-});
-
-document.addEventListener('click', e => {
-  if (window.innerWidth <= 768) {
-    if (!e.target.closest('.sidebar') && !e.target.closest('#btnToggleSidebar')) {
-      document.getElementById('sidebar').classList.remove('show');
-      document.getElementById('btnToggleSidebar')?.classList.remove('active');
-    }
-  }
-});
-
-// Cerrar modal con ESC
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('modalLlenado').classList.contains('open')) {
-    cerrarModal();
-  }
-});
-
 // ══════════════════════════════════════════════════════════════
 // INICIALIZACIÓN
 // ══════════════════════════════════════════════════════════════
 
-(function init() {
-  if (typeof R !== 'undefined' && R.length > 0) {
-    recintos = R.map(r => ({ ...r }));
+(function() {
+  let initialized = false;
+  
+  function startApp() {
+    if (initialized) return;
+    initialized = true;
     
-    llenarFiltros();
-    renderizarMapa();
+    console.log('🚀 Iniciando sistema electoral...');
     
-    document.getElementById('connText').textContent = `${recintos.length.toLocaleString('es-BO')} recintos`;
-    document.getElementById('connDot').className = 'conn-dot';
+    // Inicializar mapa
+    try {
+      if (typeof L === 'undefined') {
+        console.error('❌ Leaflet no está cargado');
+        setTimeout(startApp, 100);
+        return;
+      }
+      
+      initMap();
+      console.log('✅ Mapa inicializado');
+    } catch (error) {
+      console.error('❌ Error al inicializar mapa:', error);
+      showToast('Error al inicializar el mapa', 'error');
+      return;
+    }
     
-    // Auto-cargar datos existentes
-    setTimeout(() => {
-      cargarDatosExistentes();
-    }, 800);
+    // Cargar recintos desde data.js
+    if (typeof R === 'undefined') {
+      console.error('❌ Esperando datos de recintos...');
+      setTimeout(startApp, 100);
+      return;
+    }
+    
+    if (R.length > 0) {
+      recintos = R.map(r => ({ ...r }));
+      
+      llenarFiltros();
+      renderizarMapa();
+      actualizarEstadisticas();
+      
+      const connText = document.getElementById('connText');
+      if (connText) {
+        connText.textContent = `${recintos.length.toLocaleString('es-BO')} recintos · Click para conectar`;
+      }
+      
+      console.log(`✅ Sistema inicializado con ${recintos.length} recintos`);
+      showToast(`Sistema listo: ${recintos.length} recintos cargados`, 'success');
+    } else {
+      console.error('❌ Array R está vacío');
+      showToast('Error: No se encontraron datos de recintos', 'error');
+    }
+    
+    // Event listeners
+    setupEventListeners();
+  }
+  
+  function setupEventListeners() {
+    const btnCloseModal = document.getElementById('btnCloseModal');
+    const btnCancelar = document.getElementById('btnCancelar');
+    const btnGuardar = document.getElementById('btnGuardar');
+    const selDep = document.getElementById('selDep');
+    const selEstado = document.getElementById('selEstado');
+    const searchRecinto = document.getElementById('searchRecinto');
+    const btnToggleSidebar = document.getElementById('btnToggleSidebar');
+    
+    if (btnCloseModal) btnCloseModal.addEventListener('click', cerrarModal);
+    if (btnCancelar) btnCancelar.addEventListener('click', cerrarModal);
+    if (btnGuardar) btnGuardar.addEventListener('click', guardarDatos);
+    if (selDep) selDep.addEventListener('change', renderizarMapa);
+    if (selEstado) selEstado.addEventListener('change', renderizarMapa);
+    if (searchRecinto) searchRecinto.addEventListener('input', renderizarMapa);
+    
+    // Mobile sidebar
+    if (btnToggleSidebar) {
+      btnToggleSidebar.addEventListener('click', () => {
+        document.getElementById('sidebar').classList.toggle('show');
+        btnToggleSidebar.classList.toggle('active');
+      });
+    }
+    
+    document.addEventListener('click', e => {
+      if (window.innerWidth <= 768) {
+        if (!e.target.closest('.sidebar') && !e.target.closest('#btnToggleSidebar')) {
+          document.getElementById('sidebar')?.classList.remove('show');
+          document.getElementById('btnToggleSidebar')?.classList.remove('active');
+        }
+      }
+    });
+    
+    // Cerrar modal con ESC
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && document.getElementById('modalLlenado')?.classList.contains('open')) {
+        cerrarModal();
+      }
+    });
+    
+    console.log('✅ Event listeners configurados');
+  }
+  
+  // Esperar DOM
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startApp);
   } else {
-    showToast('Error: No se encontraron datos de recintos', 'error');
+    startApp();
   }
 })();
