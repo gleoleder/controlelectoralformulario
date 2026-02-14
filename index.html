@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Resultados Electorales · Bolivia 2026</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-brand">
+      <img src="innovacion-humana.webp" alt="IH" class="header-logo"/>
+      <div class="header-texts">
+        <span class="header-title">Resultados Electorales</span>
+        <span class="header-sub">Bolivia · Subnacionales 2026</span>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="stat-chip green" id="statCargados"><span class="stat-num">0</span><span class="stat-label">cargados</span></div>
+      <div class="stat-chip amber" id="statPendientes"><span class="stat-num">5741</span><span class="stat-label">pendientes</span></div>
+      <div class="stat-chip blue" id="statProgreso"><span class="stat-num">0%</span><span class="stat-label">avance</span></div>
+    </div>
+    <button class="btn-refresh" id="btnRefresh" title="Actualizar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+    </button>
+  </header>
+
+  <div class="layout">
+    <aside class="panel" id="panel">
+      <div class="panel-section">
+        <div class="search-box">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="searchInput" placeholder="Buscar recinto..." autocomplete="off">
+        </div>
+        <div class="search-results" id="searchResults"></div>
+      </div>
+      <div class="panel-section">
+        <label class="filter-label">Departamento</label>
+        <select id="selDep" class="filter-select"><option value="Todos">Todos</option></select>
+      </div>
+      <div class="panel-section">
+        <label class="filter-label">Municipio</label>
+        <select id="selMuni" class="filter-select"><option value="Todos">Todos</option></select>
+      </div>
+      <div class="panel-section">
+        <label class="filter-label">Estado</label>
+        <select id="selEstado" class="filter-select"><option value="Todos">Todos</option><option value="ConDatos">Con datos</option><option value="Pendiente">Sin datos</option></select>
+      </div>
+      <!-- Estadísticas globales de ganadores -->
+      <div class="panel-section" id="globalStats" style="display:none"></div>
+      <!-- Resumen municipal -->
+      <div class="panel-section" id="resumenMunicipal" style="display:none">
+        <div class="resumen-card">
+          <div class="resumen-titulo" id="resumenTitulo"></div>
+          <div class="resumen-barra" id="resumenBarra"></div>
+          <div class="resumen-lista" id="resumenLista"></div>
+          <div class="resumen-meta" id="resumenMeta"></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="map-area">
+      <div class="mobile-bar">
+        <button class="mob-btn" id="btnPanel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <button class="mob-btn" id="btnSearch"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+      </div>
+      <div class="float-search" id="floatSearch">
+        <input type="text" id="floatSearchInput" placeholder="Buscar recinto..." autocomplete="off">
+        <button class="float-close" id="floatClose">✕</button>
+        <div class="search-results float-results" id="floatResults"></div>
+      </div>
+      <div id="map"></div>
+      <div class="map-legend" id="mapLegend"></div>
+      <!-- Logo watermark -->
+      <div class="map-watermark"><img src="innovacion-humana.webp" alt="IH"></div>
+      <div class="map-credit">@Elaborado por: John Leonardo Cabrera Espíndola</div>
+    </main>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+      <div class="modal-head">
+        <img src="innovacion-humana.webp" alt="IH" class="modal-logo"/>
+        <div class="modal-head-info">
+          <h2 class="modal-title" id="modalTitle"></h2>
+          <p class="modal-sub" id="modalSub"></p>
+        </div>
+        <button class="modal-x" id="modalClose">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="loader-overlay" id="loader"><div class="loader-ring"></div><div class="loader-text" id="loaderText">Cargando...</div></div>
+  <div class="toast" id="toast"><span class="toast-icon" id="toastIcon"></span><span class="toast-msg" id="toastMsg"></span></div>
+
+  <script src="data.js"></script>
+  <script src="config.js"></script>
+  <script src="viewer.js"></script>
+</body>
+</html>
